@@ -2,6 +2,8 @@ import { createHash } from 'crypto'
 import { decode as jwtDecode } from 'jsonwebtoken'
 import oAuthClient from './client'
 import logger from '../../../lib/logger'
+var Buffer = require('buffer/').Buffer
+
 class OAuthCallbackError extends Error {
   constructor (message) {
     super(message)
@@ -109,13 +111,26 @@ export default async function oAuthCallback (req) {
  * //6/30/2020 @geraldnolan added userData parameter to attach additional data to the profileData object
  * Returns profile, raw profile and auth provider details
  */
+
+function parseJwt(token) {
+  var base64Payload = token.split('.')[1];
+  var payload = Buffer.from(base64Payload, 'base64');
+  return JSON.parse(payload.toString());
+}
+
 async function _getProfile ({
   profileData, tokens: { accessToken, refreshToken, idToken }, provider, user
 }) {
   try {
     // Convert profileData into an object if it's a string
     if (typeof profileData === 'string' || profileData instanceof String) {
-      profileData = JSON.parse(profileData)
+      const resData = JSON.parse(JSON.stringify(profileData));
+      profileData = {
+        ...parseJwt(resData),
+        idToken: '',
+        user: {}
+      }
+      
     }
 
     // If a user object is supplied (e.g. Apple provider) add it to the profile object
@@ -132,12 +147,12 @@ async function _getProfile ({
     return {
       profile: {
         ...profile,
-        email: profile.email?.toLowerCase() ?? null
+        email: profile.userid?.toLowerCase() ?? null
       },
       account: {
         provider: provider.id,
         type: provider.type,
-        id: profile.id,
+        id: provider.id,
         refreshToken,
         accessToken,
         accessTokenExpires: null
